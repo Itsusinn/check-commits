@@ -1,7 +1,9 @@
 [package]
-name = "check-commits"
-version = "0.1.0"
+name = "check-commits-email"
+version = "0.1.1"
 edition = "2024"
+description = "Git commit email validator --- Validate git commit emails against wildcard rules "
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
