@@ -50,7 +50,7 @@ fn run(args: Args) -> Result<Vec<String>> {
     Ok(violations)
 }
 #[test]
-fn test_1(){
+fn test_1() {
     let arg = Args {
         rules: "test-rules.txt".into(),
         emails: "test-emails-1.txt".into(),
@@ -62,7 +62,7 @@ fn test_1(){
 }
 
 #[test]
-fn test_2(){
+fn test_2() {
     let arg = Args {
         rules: "test-rules.txt".into(),
         emails: "test-emails-2.txt".into(),
@@ -74,7 +74,7 @@ fn test_2(){
 }
 
 #[test]
-fn test_3(){
+fn test_3() {
     let arg = Args {
         rules: "test-rules.txt".into(),
         emails: "test-emails-3.txt".into(),
@@ -83,7 +83,6 @@ fn test_3(){
     let violations = run(arg).unwrap();
     assert_eq!(violations.len(), 0);
 }
-
 
 fn read_rules(path: impl AsRef<Path>) -> Result<HashSet<String>> {
     Ok(fs::read_to_string(path)?

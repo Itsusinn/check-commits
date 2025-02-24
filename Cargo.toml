@@ -7,3 +7,9 @@ edition = "2024"
 clap = { version = "4", features = ["derive"] }
 regex = "1"
 anyhow = "1"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ binary-ext }"
+bin-dir = "{ name }-{ target }{ binary-ext }"
+pkg-fmt = "bin"
+disabled-strategies = ["quick-install", "compile"]
