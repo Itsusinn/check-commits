@@ -1,10 +1,15 @@
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use clap::Parser;
+use hickory_resolver::{
+    Resolver,
+    config::{ResolverConfig, ResolverOpts},
+};
 use regex::Regex;
 use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 #[derive(Parser, Debug)]
@@ -49,39 +54,55 @@ fn run(args: Args) -> Result<Vec<String>> {
 
     Ok(violations)
 }
-#[test]
-fn test_1() {
-    let arg = Args {
-        rules: "test-rules.txt".into(),
-        emails: "test-emails-1.txt".into(),
-        output: "text".into(),
-    };
-    let violations = run(arg).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations.first().unwrap(), "abc@hotmail.com")
-}
+#[cfg(test)]
+mod test {
+    use crate::{Args, run};
 
-#[test]
-fn test_2() {
-    let arg = Args {
-        rules: "test-rules.txt".into(),
-        emails: "test-emails-2.txt".into(),
-        output: "text".into(),
-    };
-    let violations = run(arg).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations.first().unwrap(), "1245@foxmail.com")
-}
+    #[test]
+    fn test_1() {
+        let arg = Args {
+            rules: "test-rules.txt".into(),
+            emails: "test-emails-1.txt".into(),
+            output: "text".into(),
+        };
+        let violations = run(arg).unwrap();
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations.first().unwrap(), "abc@hotmail.com")
+    }
 
-#[test]
-fn test_3() {
-    let arg = Args {
-        rules: "test-rules.txt".into(),
-        emails: "test-emails-3.txt".into(),
-        output: "text".into(),
-    };
-    let violations = run(arg).unwrap();
-    assert_eq!(violations.len(), 0);
+    #[test]
+    fn test_2() {
+        let arg = Args {
+            rules: "test-rules.txt".into(),
+            emails: "test-emails-2.txt".into(),
+            output: "text".into(),
+        };
+        let violations = run(arg).unwrap();
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations.first().unwrap(), "1245@foxmail.com")
+    }
+
+    #[test]
+    fn test_3() {
+        let arg = Args {
+            rules: "test-rules.txt".into(),
+            emails: "test-emails-3.txt".into(),
+            output: "text".into(),
+        };
+        let violations = run(arg).unwrap();
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_4() {
+        let arg = Args {
+            rules: "test-mx-record.txt".into(),
+            emails: "test-emails-4.txt".into(),
+            output: "text".into(),
+        };
+        let violations = run(arg).unwrap();
+        assert_eq!(violations.len(), 1);
+    }
 }
 
 fn read_rules(path: impl AsRef<Path>) -> Result<HashSet<String>> {
@@ -99,22 +120,70 @@ fn read_emails(path: impl AsRef<Path>) -> Result<HashSet<String>> {
         .collect())
 }
 
-fn compile_rules(bad_rules: HashSet<String>) -> Vec<Regex> {
+enum Rule {
+    Regex(Regex),
+    MxRecord(String),
+}
+
+impl Rule {
+    fn is_match(&self, email: &str) -> Result<bool> {
+        static RESOLVER: LazyLock<Resolver> = LazyLock::new(|| {
+            Resolver::new(ResolverConfig::default(), ResolverOpts::default()).unwrap()
+        });
+        match self {
+            Rule::Regex(regex) => Ok(regex.is_match(email)),
+            Rule::MxRecord(record) => {
+                if let Some(host) = email.split('@').last() {
+                    Ok(RESOLVER
+                        .mx_lookup(host)?
+                        .into_iter()
+                        .find(|v| {
+                            let mut str = v.exchange().to_ascii();
+                            if str.ends_with('.') {
+                                str.remove(str.len() - 1);
+                            }
+                            &str == record
+                        })
+                        .is_some())
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+}
+
+fn compile_rules(bad_rules: HashSet<String>) -> Vec<Rule> {
     bad_rules
         .into_iter()
         .filter_map(|rule| {
-            let pattern = rule.trim().replace(".", r"\.").replace("*", ".*");
-            Regex::new(&format!(r"(?i)^{}", pattern))
-                .map_err(|e| eprintln!("Invalid rule '{}': {}", rule, e))
-                .ok()
+            if rule.starts_with("MX-RECORD,") {
+                match rule.split(",").last() {
+                    Some(v) => Some(Rule::MxRecord(v.into())),
+                    None => {
+                        eprintln!("Invalid rule {rule}");
+                        None
+                    }
+                }
+            } else {
+                let pattern = rule.trim().replace(".", r"\.").replace("*", ".*");
+                Regex::new(&format!(r"(?i)^{}", pattern))
+                    .map_err(|e| eprintln!("Invalid rule '{}': {}", rule, e))
+                    .map(|v| Rule::Regex(v))
+                    .ok()
+            }
         })
         .collect()
 }
 
-fn find_violations(commit_emails: HashSet<String>, regex_rules: Vec<Regex>) -> Vec<String> {
+fn find_violations(commit_emails: HashSet<String>, regex_rules: Vec<Rule>) -> Vec<String> {
     let mut violations: Vec<_> = commit_emails
         .iter()
-        .filter(|email| regex_rules.iter().any(|re| re.is_match(email)))
+        .filter(|email| {
+            regex_rules
+                .iter()
+                .any(|re| re.is_match(email).unwrap_or(false))
+        })
         .cloned()
         .collect();
 

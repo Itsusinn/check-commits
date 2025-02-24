@@ -1,0 +1,3 @@
+MX-RECORD,mxbiz1.qq.com
+MX-RECORD,route1.mx.cloudflare.net
+
