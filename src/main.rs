@@ -133,18 +133,14 @@ impl Rule {
         match self {
             Rule::Regex(regex) => Ok(regex.is_match(email)),
             Rule::MxRecord(record) => {
-                if let Some(host) = email.split('@').last() {
-                    Ok(RESOLVER
-                        .mx_lookup(host)?
-                        .into_iter()
-                        .find(|v| {
-                            let mut str = v.exchange().to_ascii();
-                            if str.ends_with('.') {
-                                str.remove(str.len() - 1);
-                            }
-                            &str == record
-                        })
-                        .is_some())
+                if let Some(host) = email.split('@').next_back() {
+                    Ok(RESOLVER.mx_lookup(host)?.into_iter().any(|v| {
+                        let mut str = v.exchange().to_ascii();
+                        if str.ends_with('.') {
+                            str.remove(str.len() - 1);
+                        }
+                        &str == record
+                    }))
                 } else {
                     Ok(false)
                 }
@@ -169,7 +165,7 @@ fn compile_rules(bad_rules: HashSet<String>) -> Vec<Rule> {
                 let pattern = rule.trim().replace(".", r"\.").replace("*", ".*");
                 Regex::new(&format!(r"(?i)^{}", pattern))
                     .map_err(|e| eprintln!("Invalid rule '{}': {}", rule, e))
-                    .map(|v| Rule::Regex(v))
+                    .map(Rule::Regex)
                     .ok()
             }
         })

@@ -1,6 +1,6 @@
 [package]
 name = "check-commits-email"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 description = "Git commit email validator --- Validate git commit emails against wildcard rules "
 license = "AGPL-3.0-or-later"
@@ -10,6 +10,7 @@ repository = "https://github.com/Itsusinn/check-commits-email"
 clap = { version = "4", features = ["derive"] }
 regex = "1"
 anyhow = "1"
+hickory-resolver = "0.24"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ binary-ext }"
