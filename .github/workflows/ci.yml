@@ -171,6 +171,8 @@ jobs:
     name: Release
     needs: [compile]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -190,9 +192,13 @@ jobs:
           name: binaries
           path: ./packages
 
-      - name: Move latest tag for git-cliff nightly
+      - name: Clean git tag & release
         run: |
+          gh release delete latest --cleanup-tag --yes --repo $GITHUB_REPOSITORY || true
+          # Move latest tag to current commit locally
           git tag latest -f
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate a changelog
         uses: orhun/git-cliff-action@main
@@ -213,26 +219,7 @@ jobs:
           body: ${{ steps.git-cliff.outputs.content }}
           files: |
             packages/*
-            LICENSE*
-
-      - name: Delete old latest nightly release
-        if: startsWith(github.ref, 'refs/heads/master')
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const tag = 'latest'
-            const { owner, repo } = context.repo
-            const { data: { id } } = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
-            await github.rest.repos.deleteRelease({ owner, repo, release_id: id })
-
-      - name: Update Latest Tag
-        if: startsWith(github.ref, 'refs/heads/master')
-        uses: richardsimko/update-tag@v1
-        with:
-          tag_name: latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            LICENSE
 
       - name: Github nightly release
         uses: softprops/action-gh-release@v2
@@ -240,9 +227,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: true
-          tag_name: "latest"
           generate_release_notes: false
           body: ${{ steps.git-cliff.outputs.content }}
+          tag_name: "latest"
           files: |
             packages/*
-            LICENSE*
+            LICENSE
+  
